@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - mongodb
+      - crawler
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongodb:27017
+      - CRAWLER_URL=http://crawler:8081/crawl
+    networks:
+      - app-network
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+  mongodb:
+    image: mongo:noble
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile.crawler
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+
+volumes:
+  redis-data:
+  mongo-data:
+
+networks:
+  app-network:
+    driver: bridge

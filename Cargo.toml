@@ -1,0 +1,16 @@
+[package]
+name = "load-reducer-poc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4.11.0"
+bson = "3.0.0"
+chrono = "0.4.42"
+deadpool-redis = { version = "0.22.0", features = ["cluster-async", "serde"] }
+env_logger = "0.11.8"
+futures = "0.3.31"
+mongodb = "3.3.0"
+reqwest = { version = "0.12.23", features = ["json"] }
+serde = { version = "1.0.226", features = ["derive"] }
+tokio = { version = "1.47.1", features = ["full"] }
