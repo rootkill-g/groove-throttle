@@ -1037,6 +1037,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
+name = "groove-throttle"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "async-trait",
+ "bson 3.0.0",
+ "chrono",
+ "deadpool-redis",
+ "env_logger",
+ "futures",
+ "mongodb",
+ "reqwest",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1591,23 +1608,6 @@ name = "litemap"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
-
-[[package]]
-name = "load-reducer-poc"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-trait",
- "bson 3.0.0",
- "chrono",
- "deadpool-redis",
- "env_logger",
- "futures",
- "mongodb",
- "reqwest",
- "serde",
- "tokio",
-]
 
 [[package]]
 name = "local-channel"

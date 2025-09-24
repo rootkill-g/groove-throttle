@@ -12,7 +12,7 @@ RUN cargo build --release
 
 FROM debian:trixie-slim
 
-COPY --from=builder /usr/src/app/target/release/load-reducer-poc /usr/local/bin/rust_web_app
+COPY --from=builder /usr/src/app/target/release/groove-throttle /usr/local/bin/rust_web_app
 
 EXPOSE 8000
 
