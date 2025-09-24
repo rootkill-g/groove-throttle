@@ -1597,6 +1597,7 @@ name = "load-reducer-poc"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "async-trait",
  "bson 3.0.0",
  "chrono",
  "deadpool-redis",

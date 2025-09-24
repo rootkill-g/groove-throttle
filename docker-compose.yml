@@ -1,54 +1,46 @@
 version: '3.8'
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    depends_on:
-      - redis
-      - mongodb
-      - crawler
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - MONGO_URL=mongodb://mongodb:27017
-      - CRAWLER_URL=http://crawler:8081/crawl
-    networks:
-      - app-network
-
   redis:
-    image: redis:latest
+    image: redis:7
+    restart: unless-stopped
     ports:
       - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - app-network
 
-  mongodb:
-    image: mongo:noble
+  mongo:
+    image: mongo:6.0
+    restart: unless-stopped
     ports:
       - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    networks:
-      - app-network
+    command: ["--bind_ip_all"]
 
   crawler:
     build:
       context: .
       dockerfile: Dockerfile.crawler
+    restart: unless-stopped
     ports:
       - "8081:8081"
-    networks:
-      - app-network
+    environment:
+      - PORT=8081
 
-volumes:
-  redis-data:
-  mongo-data:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongo:27017
+      - CRAWLER_URL=http://crawler:8081/crawl
+    depends_on:
+      - redis
+      - mongo
+      - crawler
 
-networks:
-  app-network:
-    driver: bridge
+# Note: the Rust app is built from the local Dockerfile and will run as the `server` service.
+# The integration script in `scripts/integration_test.sh` currently starts services and runs
+# the app locally via `cargo run`; you can instead run `docker-compose up --build` to run
+# everything in containers (including the server) if preferred.
