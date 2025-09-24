@@ -1,25 +1,34 @@
-use async_trait::async_trait;
+use groove_throttle::ports::{BoxError, RedisPort};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
-use load_reducer_poc::ports::{RedisPort, BoxError};
 
 #[derive(Clone)]
 struct CoordinatedRedisSimple {
-    store: Arc<Mutex<HashMap<String, HashMap<String, String>>>>,
+    _store: Arc<Mutex<HashMap<String, HashMap<String, String>>>>,
     counter: Arc<AtomicUsize>,
     notify: Arc<Notify>,
 }
 
 impl CoordinatedRedisSimple {
-    fn new() -> Self { Self { store: Arc::new(Mutex::new(HashMap::new())), counter: Arc::new(AtomicUsize::new(0)), notify: Arc::new(Notify::new()) } }
+    fn new() -> Self {
+        Self {
+            _store: Arc::new(Mutex::new(HashMap::new())),
+            counter: Arc::new(AtomicUsize::new(0)),
+            notify: Arc::new(Notify::new()),
+        }
+    }
 }
 
-#[async_trait]
 impl RedisPort for CoordinatedRedisSimple {
-    async fn multi_hgetall(&self, _keys: &[String]) -> Result<Vec<HashMap<String, String>>, BoxError> { Ok(vec![]) }
-    async fn hgetall(&self, key: &str) -> Result<HashMap<String, String>, BoxError> {
+    async fn multi_hgetall(
+        &self,
+        _keys: &[String],
+    ) -> Result<Vec<HashMap<String, String>>, BoxError> {
+        Ok(vec![])
+    }
+    async fn hgetall(&self, _key: &str) -> Result<HashMap<String, String>, BoxError> {
         let n = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
         eprintln!("[CoordSimple] hgetall called nth={}", n);
         if n == 2 {
@@ -29,8 +38,21 @@ impl RedisPort for CoordinatedRedisSimple {
         }
         Ok(HashMap::new())
     }
-    async fn write_cache_and_clear(&self, _key: &str, _data: &str, _cache_ttl: u64) -> Result<(), BoxError> { Ok(()) }
-    async fn set_inflight_fields(&self, _key: &str, _last_mongo: Option<u64>, _last_crawler: Option<u64>, _inflight_ttl: u64) -> Result<(), BoxError> {
+    async fn write_cache_and_clear(
+        &self,
+        _key: &str,
+        _data: &str,
+        _cache_ttl: u64,
+    ) -> Result<(), BoxError> {
+        Ok(())
+    }
+    async fn set_inflight_fields(
+        &self,
+        _key: &str,
+        _last_mongo: Option<u64>,
+        _last_crawler: Option<u64>,
+        _inflight_ttl: u64,
+    ) -> Result<(), BoxError> {
         eprintln!("[CoordSimple] set_inflight_fields called, notifying");
         self.notify.notify_waiters();
         Ok(())
@@ -46,7 +68,9 @@ async fn debug_notify_works() {
     let t1 = tokio::spawn(async move {
         r1.hgetall("k").await.unwrap();
         // then set inflight
-        r1.set_inflight_fields("k", None, Some(1), 10).await.unwrap();
+        r1.set_inflight_fields("k", None, Some(1), 10)
+            .await
+            .unwrap();
         eprintln!("[t1] done set_inflight");
     });
 
@@ -59,4 +83,3 @@ async fn debug_notify_works() {
     t2.await.unwrap();
     eprintln!("[debug_notify_works] both tasks completed");
 }
-

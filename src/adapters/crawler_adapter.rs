@@ -1,5 +1,4 @@
 use crate::ports::{BoxError, CrawlerPort};
-use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct ReqwestCrawlerAdapter {
@@ -7,7 +6,6 @@ pub struct ReqwestCrawlerAdapter {
     pub url: String,
 }
 
-#[async_trait]
 impl CrawlerPort for ReqwestCrawlerAdapter {
     async fn send_batch(&self, urls: &[String]) -> Result<(), BoxError> {
         let res = self.client.post(&self.url).json(&urls).send().await?;
@@ -18,4 +16,3 @@ impl CrawlerPort for ReqwestCrawlerAdapter {
         }
     }
 }
-

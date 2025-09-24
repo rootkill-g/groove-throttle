@@ -1,10 +1,9 @@
-use load_reducer_poc::service::LoadReducerService;
-use load_reducer_poc::config::Config;
-use load_reducer_poc::ports::{RedisPort, MongoPort, CrawlerPort, BoxError};
-use async_trait::async_trait;
+use groove_throttle::config::Config;
+use groove_throttle::ports::{BoxError, CrawlerPort, MongoPort, RedisPort};
+use groove_throttle::service::LoadReducerService;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 
 // Mock Redis with coordination to simulate race window
@@ -17,13 +16,19 @@ struct CoordinatedRedis {
 
 impl CoordinatedRedis {
     fn new() -> Self {
-        Self { store: Arc::new(Mutex::new(HashMap::new())), counter: Arc::new(AtomicUsize::new(0)), notify: Arc::new(Notify::new()) }
+        Self {
+            store: Arc::new(Mutex::new(HashMap::new())),
+            counter: Arc::new(AtomicUsize::new(0)),
+            notify: Arc::new(Notify::new()),
+        }
     }
 }
 
-#[async_trait]
 impl RedisPort for CoordinatedRedis {
-    async fn multi_hgetall(&self, keys: &[String]) -> Result<Vec<HashMap<String, String>>, BoxError> {
+    async fn multi_hgetall(
+        &self,
+        keys: &[String],
+    ) -> Result<Vec<HashMap<String, String>>, BoxError> {
         let store = self.store.lock().unwrap();
         let mut res = Vec::new();
         for k in keys {
@@ -35,13 +40,18 @@ impl RedisPort for CoordinatedRedis {
     async fn hgetall(&self, key: &str) -> Result<HashMap<String, String>, BoxError> {
         // Increment counter; if we're the second caller, wait until notified (so first can write inflight)
         let n = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
-        eprintln!("[CoordinatedRedis] hgetall called for key={} nth={}", key, n);
+        eprintln!(
+            "[CoordinatedRedis] hgetall called for key={} nth={}",
+            key, n
+        );
         if n == 2 {
             // Check if inflight fields already present to avoid missed-notify hang
             {
                 let store = self.store.lock().unwrap();
                 if let Some(entry) = store.get(key) {
-                    if entry.contains_key("last_crawler_send") || entry.contains_key("last_mongo_fetch") {
+                    if entry.contains_key("last_crawler_send")
+                        || entry.contains_key("last_mongo_fetch")
+                    {
                         eprintln!("[CoordinatedRedis] inflight already present, not waiting");
                         let cloned = entry.clone();
                         return Ok(cloned);
@@ -57,7 +67,12 @@ impl RedisPort for CoordinatedRedis {
         Ok(store.get(key).cloned().unwrap_or_default())
     }
 
-    async fn write_cache_and_clear(&self, key: &str, data: &str, _cache_ttl: u64) -> Result<(), BoxError> {
+    async fn write_cache_and_clear(
+        &self,
+        key: &str,
+        data: &str,
+        _cache_ttl: u64,
+    ) -> Result<(), BoxError> {
         eprintln!("[CoordinatedRedis] write_cache_and_clear key={}", key);
         let mut store = self.store.lock().unwrap();
         let entry = store.entry(key.to_string()).or_default();
@@ -67,8 +82,17 @@ impl RedisPort for CoordinatedRedis {
         Ok(())
     }
 
-    async fn set_inflight_fields(&self, key: &str, last_mongo: Option<u64>, last_crawler: Option<u64>, _inflight_ttl: u64) -> Result<(), BoxError> {
-        eprintln!("[CoordinatedRedis] set_inflight_fields key={} last_mongo={:?} last_crawler={:?}", key, last_mongo, last_crawler);
+    async fn set_inflight_fields(
+        &self,
+        key: &str,
+        last_mongo: Option<u64>,
+        last_crawler: Option<u64>,
+        _inflight_ttl: u64,
+    ) -> Result<(), BoxError> {
+        eprintln!(
+            "[CoordinatedRedis] set_inflight_fields key={} last_mongo={:?} last_crawler={:?}",
+            key, last_mongo, last_crawler
+        );
         let mut store = self.store.lock().unwrap();
         let entry = store.entry(key.to_string()).or_default();
         if let Some(m) = last_mongo {
@@ -88,7 +112,6 @@ impl RedisPort for CoordinatedRedis {
 #[derive(Clone)]
 struct MockMongo;
 
-#[async_trait]
 impl MongoPort for MockMongo {
     async fn find_by_urls(&self, _urls: &[String]) -> Result<HashMap<String, String>, BoxError> {
         Ok(HashMap::new())
@@ -97,11 +120,18 @@ impl MongoPort for MockMongo {
 
 // Mock Crawler will record sends
 #[derive(Clone)]
-struct MockCrawler { pub sent_count: Arc<Mutex<usize>> }
+struct MockCrawler {
+    pub sent_count: Arc<Mutex<usize>>,
+}
 
-impl MockCrawler { fn new() -> Self { Self { sent_count: Arc::new(Mutex::new(0)) } } }
+impl MockCrawler {
+    fn new() -> Self {
+        Self {
+            sent_count: Arc::new(Mutex::new(0)),
+        }
+    }
+}
 
-#[async_trait]
 impl CrawlerPort for MockCrawler {
     async fn send_batch(&self, urls: &[String]) -> Result<(), BoxError> {
         let mut s = self.sent_count.lock().unwrap();
@@ -122,7 +152,12 @@ async fn concurrency_inflight_suppression_single_crawler_call() {
     let mut config = Config::from_env();
     config.crawler_prevent_ms = 0; // allow immediate sends
 
-    let service = Arc::new(LoadReducerService::new(redis.clone(), mongo.clone(), crawler.clone(), config));
+    let service = Arc::new(LoadReducerService::new(
+        redis.clone(),
+        mongo.clone(),
+        crawler.clone(),
+        config,
+    ));
 
     let url = "https://example.com/concurrent".to_string();
 
@@ -143,5 +178,9 @@ async fn concurrency_inflight_suppression_single_crawler_call() {
     eprintln!("[TEST] tasks completed, checking crawler calls");
     // Ensure crawler was called exactly once
     let sent = crawler.sent_count.lock().unwrap();
-    assert_eq!(*sent, 1, "Expected exactly one crawler batch send, got {}", *sent);
+    assert_eq!(
+        *sent, 1,
+        "Expected exactly one crawler batch send, got {}",
+        *sent
+    );
 }

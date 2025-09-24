@@ -1,8 +1,6 @@
-use load_reducer_poc::service::LoadReducerService;
-use load_reducer_poc::config::Config;
-use load_reducer_poc::ports::{RedisPort, MongoPort, CrawlerPort, BoxError};
-use load_reducer_poc::domain::UrlData;
-use async_trait::async_trait;
+use groove_throttle::config::Config;
+use groove_throttle::ports::{BoxError, CrawlerPort, MongoPort, RedisPort};
+use groove_throttle::service::LoadReducerService;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -15,13 +13,17 @@ struct MockRedis {
 
 impl MockRedis {
     fn new() -> Self {
-        Self { store: Arc::new(Mutex::new(HashMap::new())) }
+        Self {
+            store: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }
 
-#[async_trait]
 impl RedisPort for MockRedis {
-    async fn multi_hgetall(&self, keys: &[String]) -> Result<Vec<HashMap<String, String>>, BoxError> {
+    async fn multi_hgetall(
+        &self,
+        keys: &[String],
+    ) -> Result<Vec<HashMap<String, String>>, BoxError> {
         let store = self.store.lock().unwrap();
         let mut res = Vec::new();
         for k in keys {
@@ -35,7 +37,12 @@ impl RedisPort for MockRedis {
         Ok(store.get(key).cloned().unwrap_or_default())
     }
 
-    async fn write_cache_and_clear(&self, key: &str, data: &str, _cache_ttl: u64) -> Result<(), BoxError> {
+    async fn write_cache_and_clear(
+        &self,
+        key: &str,
+        data: &str,
+        _cache_ttl: u64,
+    ) -> Result<(), BoxError> {
         let mut store = self.store.lock().unwrap();
         let entry = store.entry(key.to_string()).or_default();
         entry.insert("data".to_string(), data.to_string());
@@ -44,7 +51,13 @@ impl RedisPort for MockRedis {
         Ok(())
     }
 
-    async fn set_inflight_fields(&self, key: &str, last_mongo: Option<u64>, last_crawler: Option<u64>, _inflight_ttl: u64) -> Result<(), BoxError> {
+    async fn set_inflight_fields(
+        &self,
+        key: &str,
+        last_mongo: Option<u64>,
+        last_crawler: Option<u64>,
+        _inflight_ttl: u64,
+    ) -> Result<(), BoxError> {
         let mut store = self.store.lock().unwrap();
         let entry = store.entry(key.to_string()).or_default();
         if let Some(m) = last_mongo {
@@ -64,16 +77,21 @@ struct MockMongo {
 }
 
 impl MockMongo {
-    fn new() -> Self { Self { data: Arc::new(Mutex::new(HashMap::new())) } }
+    fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 }
 
-#[async_trait]
 impl MongoPort for MockMongo {
     async fn find_by_urls(&self, urls: &[String]) -> Result<HashMap<String, String>, BoxError> {
         let data = self.data.lock().unwrap();
         let mut res = HashMap::new();
         for u in urls {
-            if let Some(d) = data.get(u) { res.insert(u.clone(), d.clone()); }
+            if let Some(d) = data.get(u) {
+                res.insert(u.clone(), d.clone());
+            }
         }
         Ok(res)
     }
@@ -86,10 +104,13 @@ struct MockCrawler {
 }
 
 impl MockCrawler {
-    fn new() -> Self { Self { sent: Arc::new(Mutex::new(Vec::new())) } }
+    fn new() -> Self {
+        Self {
+            sent: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
 }
 
-#[async_trait]
 impl CrawlerPort for MockCrawler {
     async fn send_batch(&self, urls: &[String]) -> Result<(), BoxError> {
         let mut s = self.sent.lock().unwrap();
@@ -115,7 +136,10 @@ async fn test_cache_hit_no_mongo_no_crawler() {
     let config = Config::from_env();
     let service = LoadReducerService::new(redis.clone(), mongo.clone(), crawler.clone(), config);
 
-    let res = service.process(vec!["https://example.com/a".to_string()]).await.unwrap();
+    let res = service
+        .process(vec!["https://example.com/a".to_string()])
+        .await
+        .unwrap();
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].data, "cached-value");
 
@@ -135,13 +159,19 @@ async fn test_mongo_fetch_and_cache_write() {
     // Populate mongo
     {
         let mut data = mongo.data.lock().unwrap();
-        data.insert("https://example.com/b".to_string(), "mongo-value".to_string());
+        data.insert(
+            "https://example.com/b".to_string(),
+            "mongo-value".to_string(),
+        );
     }
 
     let config = Config::from_env();
     let service = LoadReducerService::new(redis.clone(), mongo.clone(), crawler.clone(), config);
 
-    let res = service.process(vec!["https://example.com/b".to_string()]).await.unwrap();
+    let res = service
+        .process(vec!["https://example.com/b".to_string()])
+        .await
+        .unwrap();
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].data, "mongo-value");
 
@@ -178,4 +208,3 @@ async fn test_missing_triggers_crawler_and_inflight_update() {
     let hash = store.get(&format!("rcs::{}", url)).unwrap();
     assert!(hash.contains_key("last_crawler_send") || hash.contains_key("last_mongo_fetch"));
 }
-
